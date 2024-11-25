@@ -42,8 +42,8 @@ ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.sh
 
 # Print the camera matrix K
 print("Camera Matrix (K):\n", mtx)
-
+print("Dist:\n", dist)
 # Save the camera matrix (optional)
-np.savez('camera_calibration.npz', mtx=mtx, dist=dist, rvecs=rvecs, tvecs=tvecs)
+# np.savez('camera_calibration.npz', mtx=mtx, dist=dist, rvecs=rvecs, tvecs=tvecs)
 
-print("Camera calibration complete. Results saved to camera_calibration.npz")
+# print("Camera calibration complete. Results saved to camera_calibration.npz")
