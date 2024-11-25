@@ -3,7 +3,7 @@ import numpy as np
 import glob
 
 # Define the dimensions of the chessboard
-CHECKERBOARD = (3, 4)  # Number of inner corners (rows, cols)  Adjust to your chessboard
+CHECKERBOARD = (3, 3)  # Number of inner corners (rows, cols)  Adjust to your chessboard
 
 # Prepare object points (3D points in real world space)
 objp = np.zeros((CHECKERBOARD[0] * CHECKERBOARD[1], 3), np.float32)

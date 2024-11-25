@@ -3,9 +3,10 @@ import cv2
 import numpy as np
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
-
+from transformers import AutoImageProcessor, SuperPointForKeypointDetection
+from superglue import SuperGlue
 class SfM:
-    def __init__(self, detector, matcher, K, dist):
+    def __init__(self, detector, matcher, K, dist, CV_MATCHER=False):
         self.detector = detector
         self.matcher = matcher
         self.K = K
@@ -15,6 +16,8 @@ class SfM:
         self.camera_rotations = [np.eye(3)]
         self.camera_translations = [np.zeros((3, 1))]
         self.points_3d = []
+
+        self.CV_MATCHER = CV_MATCHER
 
     def _get_features(self, im1, im2):
         kp1, des1 = self.detector.detectAndCompute(im1, None)
@@ -30,13 +33,17 @@ class SfM:
         pts2 = []
 
         for i, (m, n) in enumerate(matches):
-            if m.distance < 0.65 * n.distance:
+            if m.distance < 0.75 * n.distance:
                 good_matches.append(m)
-                pts1.append(kp1[m.queryIdx].pt)
-                pts2.append(kp2[m.trainIdx].pt)
-                mask[i] = [1, 0]
+                if self.CV_MATCHER:
+                    pts1.append(kp1[m.queryIdx].pt)
+                    pts2.append(kp2[m.trainIdx].pt)
 
-        plot_matches(img1, img2, kp1, kp2, matches, mask)
+                else:
+                    pts1.append(kp1[m.queryIdx])
+                    pts2.append(kp2[m.trainIdx])
+                
+                mask[i] = [1, 0]
         
         return np.float32(pts1), np.float32(pts2)
 
@@ -49,7 +56,7 @@ class SfM:
         X = X.reshape(-1, 3)
         projected_pts1 = self._project_points(X, R1, t1)
         projected_pts2 = self._project_points(X, R2, t2)
-        error = np.sum((projected_pts1 - pts1)**2 + (projected_pts2 - pts2)**2)
+        error = np.concatenate(((projected_pts1 - pts1), (projected_pts2 - pts2))).ravel()
         return error
     
     def _triangulate(self, pts1, pts2, R1, t1, R2, t2):
@@ -71,17 +78,18 @@ class SfM:
         X0 = points_3d.flatten()
         optimized_params = least_squares(
             self._reprojection_error, X0, args=(R1, t1, R2, t2, pts1, pts2),
-            max_nfev=50
+            max_nfev=50, method='lm'
         )
         optimized_points_3d = optimized_params.x.reshape(-1, 3)
         return optimized_points_3d
     
-    def _load_images(self, folder_path):
+    def _load_images(self, folder_path, gray=True):
         image_paths = sorted([os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith(".jpg") or f.endswith(".png")] )
-        self.images = [cv2.imread(p, cv2.IMREAD_GRAYSCALE) for p in image_paths]
+        if gray: self.images = [cv2.imread(p, cv2.IMREAD_GRAYSCALE) for p in image_paths]
+        else: self.images = [cv2.imread(p) for p in image_paths]
 
     def reconstruct(self, images_folder):
-        self._load_images(images_folder)
+        self._load_images(images_folder, self.CV_MATCHER)
         for i in range(len(self.images)-1):
             # Detect fratures on two consecutive pictures and match them
             kp1, des1, kp2, des2 = self._get_features(self.images[i], self.images[i+1])
@@ -89,8 +97,9 @@ class SfM:
             
             # Initial triangulation
             E, mask = cv2.findEssentialMat(pts1, pts2, self.K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
-            pts1 = pts1[mask.ravel() == 1]
-            pts2 = pts2[mask.ravel() == 1]
+            if mask is not None:
+                pts1 = pts1[mask.ravel() == 1]
+                pts2 = pts2[mask.ravel() == 1]
             _, R, t, _ = cv2.recoverPose(E, pts1, pts2, self.K)
             points_3d = self._triangulate(pts1, pts2, self.camera_rotations[-1], self.camera_translations[-1], R, t)
             
@@ -110,6 +119,22 @@ class SfM:
                     
         return np.vstack(self.points_3d)
 
+class SuperPoint:
+    def __init__(self):
+        self.processor = AutoImageProcessor.from_pretrained("magic-leap-community/superpoint")
+        self.model = SuperPointForKeypointDetection.from_pretrained("magic-leap-community/superpoint")
+        self.processor.do_resize = False  # Disable resizing
+    
+    def detectAndCompute(self, img, _):
+        # Process image using SuperPoint
+        inputs = self.processor(img, return_tensors="pt")
+        outputs = self.model(**inputs)
+
+        # Extract keypoints and descriptors
+        kp = outputs.keypoints[0].detach().numpy()
+        desc = outputs.descriptors[0].detach().numpy()
+        
+        return kp, desc
 
 def plot_3d_points(points3D):
     fig = plt.figure()
@@ -121,49 +146,10 @@ def plot_3d_points(points3D):
     plt.title('Triangulated 3D Points')
     plt.show(block=True)
 
-def plot_matches(img1, img2, kp1, kp2, matches, mask):
-    matched = cv2.drawMatchesKnn(img1, 
-                                kp1, 
-                                img2, 
-                                kp2, 
-                                matches,
-                                outImg=None, 
-                                matchColor=(0, 155, 0), 
-                                singlePointColor=(0, 255, 255), 
-                                matchesMask=mask, 
-                                flags=0) 
-    plt.title("Matched Features")
-    plt.imshow(matched)
-    plt.show()
-
-def plot_3d_points_and_cameras(points3D, Rs, ts):  # Combined plotting function
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-
-    # Plot 3D points
-    ax.scatter(points3D[:, 0], points3D[:, 1], points3D[:, 2], c='r', marker='o', label='3D Points')
-
-    # Plot camera poses
-    for R, t in zip(Rs, ts):
-        ax.scatter(t[0], t[1], t[2], c='b', marker='^', label='Camera') # Camera center
-        axes_length = 0.1
-        axes = R @ np.eye(3) * axes_length
-        for axis in axes:
-            ax.plot([t[0], t[0] + axis[0]], [t[1], t[1] + axis[1]], [t[2], t[2] + axis[2]], c='g')
-
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    plt.title('Triangulated 3D Points and Camera Poses')
-    plt.show(block=True)
-
-
 K = np.array([[1.59877590e+03, 0, 5.07401915e+02], [0, 1.57986433e+03, 7.23899817e+02], [0, 0, 1]])
 dist =  np.array([1.01762294e-01, -1.85222000e+00, -1.95598585e-02, -2.43105406e-03, 4.57588149e+00])
 
-sfm = SfM(cv2.SIFT_create(), cv2.BFMatcher(normType=cv2.NORM_L2), K, dist)
+sfm = SfM(SuperPoint(), cv2.BFMatcher(normType=cv2.NORM_L2), K, dist, False)
 
 result = sfm.reconstruct("benchy")
-
-# plot_3d_points_and_cameras(result, sfm.camera_rotations, sfm.camera_translations)
 plot_3d_points(result)

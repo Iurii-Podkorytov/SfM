@@ -1,3 +1,7 @@
 frames
 *.mp4
 *.npz
+superglue.py
+test.ipynb
+colmap_test.py
+superglue_indoor.pth
