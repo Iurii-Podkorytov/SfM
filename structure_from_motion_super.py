@@ -99,10 +99,11 @@ class SfM:
                     
         return np.vstack(self.points_3d)
 
-K = np.array([[1.59877590e+03, 0, 5.07401915e+02], [0, 1.57986433e+03, 7.23899817e+02], [0, 0, 1]])
-dist =  np.array([1.01762294e-01, -1.85222000e+00, -1.95598585e-02, -2.43105406e-03, 4.57588149e+00])
+if __name__ == "__main__":
+    K = np.array([[1.59877590e+03, 0, 5.07401915e+02], [0, 1.57986433e+03, 7.23899817e+02], [0, 0, 1]])
+    dist =  np.array([1.01762294e-01, -1.85222000e+00, -1.95598585e-02, -2.43105406e-03, 4.57588149e+00])
 
-sfm = SfM(SuperPointWrapper(), SuperGlueWrapper(), K, dist)
+    sfm = SfM(SuperPointWrapper(), SuperGlueWrapper(), K, dist)
 
-result = sfm.reconstruct("benchy")
-plot_3d_points(result)
+    result = sfm.reconstruct("benchy")
+    plot_3d_points(result)
