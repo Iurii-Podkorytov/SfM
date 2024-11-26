@@ -1,6 +1,6 @@
 # Structure from Motion (SfM)
 
-![License](https://img.shields.io/github/license/Iurii-Podkorytov/SfM)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Python](https://img.shields.io/badge/python-3670A0?logo=python&logoColor=ffdd54)
 ![Jupyter Notebookdf](https://img.shields.io/badge/jupyter-%23FA0F00.svg?&logo=jupyter&logoColor=white)
 ![Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-brightgreen)
@@ -27,11 +27,11 @@ Our approach uses modern feature detectors like **SuperPoint**, feature matchers
 
 Below are some examples in the procces:
 
-![Example 1](report images\duck_sift.png)
+![Example 1](https://github.com/Iurii-Podkorytov/SfM/blob/1f8019ae49a6755dfdde4683302c3c11616ef7bf/report%20images/duck_sift.png)
 
 *Feature detection of a toy duck using SIFT*
 
-![Example 2](report images\duck_sp_bfm.png)  
+![Example 2](https://github.com/Iurii-Podkorytov/SfM/blob/1f8019ae49a6755dfdde4683302c3c11616ef7bf/report%20images/duck_sp_bfm.png)  
 *Feature matching of a toy duck using BFM*
 
 ---
@@ -39,7 +39,7 @@ Below are some examples in the procces:
 ## 🚀 How to Use
 
 1. Shoot a video of an object or take pictures of it.
-2. Follow the instructions in the *.ipynb* file
+2. Follow the instructions in the *presentation.ipynb* file
 
 ## ⚙️ Libraries and Tools Used
 
