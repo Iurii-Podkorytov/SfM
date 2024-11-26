@@ -3,3 +3,4 @@ frames
 *.npz
 test.ipynb
 colmap_test.py
+__pycache__

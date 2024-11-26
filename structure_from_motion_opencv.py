@@ -2,10 +2,11 @@ import os
 import cv2
 import numpy as np
 from scipy.optimize import least_squares
-import matplotlib.pyplot as plt
+from utils import *
+from wrappers import *
 
 class SfM:
-    def __init__(self, detector, matcher, K, dist):
+    def __init__(self, detector, matcher, K, dist, is_cv=True):
         self.detector = detector
         self.matcher = matcher
         self.K = K
@@ -16,13 +17,18 @@ class SfM:
         self.camera_translations = [np.zeros((3, 1))]
         self.points_3d = []
 
+        self.is_cv = is_cv
 
     def _get_features(self, im1, im2):
-        kp1, des1 = self.detector.detectAndCompute(im1, None)
-        kp2, des2 = self.detector.detectAndCompute(im2, None)
+        if self.is_cv:
+            kp1, des1 = self.detector.detectAndCompute(im1, None)
+            kp2, des2 = self.detector.detectAndCompute(im2, None)
+        else:
+            kp1, des1, _ = self.detector.detect(im1)
+            kp2, des2, _ = self.detector.detect(im2)
         return kp1, des1, kp2, des2
     
-    def _get_matched_points(self, kp1, kp2, des1, des2, img1=None, img2=None):
+    def _get_matched_points(self, kp1, kp2, des1, des2, return_mathces=False, tolerance=0.75):
         matches = self.matcher.knnMatch(des1, des2, k=2)  # k=2 for ratio test
 
         good_matches = []
@@ -31,19 +37,21 @@ class SfM:
         pts2 = []
 
         for i, (m, n) in enumerate(matches):
-            if m.distance < 0.75 * n.distance:
+            if m.distance < tolerance * n.distance:
                 good_matches.append(m)
-                if self.CV_MATCHER:
+                if self.is_cv:
                     pts1.append(kp1[m.queryIdx].pt)
                     pts2.append(kp2[m.trainIdx].pt)
-
                 else:
                     pts1.append(kp1[m.queryIdx])
                     pts2.append(kp2[m.trainIdx])
                 
                 mask[i] = [1, 0]
         
-        return np.float32(pts1), np.float32(pts2)
+        pts1 = np.array(pts1)
+        pts2 = np.array(pts2)
+        if return_mathces: return pts1, pts2, matches, mask
+        return pts1, pts2
 
     def _project_points(self, X, R, t):
         projected_points = self.K @ (R @ X.T + t)
@@ -86,19 +94,27 @@ class SfM:
         if gray: self.images = [cv2.imread(p, cv2.IMREAD_GRAYSCALE) for p in image_paths]
         else: self.images = [cv2.imread(p) for p in image_paths]
 
+    def _findEssantialMatrix(self, pts1, pts2):
+        E, mask = cv2.findEssentialMat(pts1, pts2, self.K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
+        if mask is not None:
+            pts1 = pts1[mask.ravel() == 1]
+            pts2 = pts2[mask.ravel() == 1]
+        return E, pts1, pts2
+    
+    def _recoverPose(self, E, pts1, pts2):
+        _, R, t, _ = cv2.recoverPose(E, pts1, pts2, self.K)
+        return R, t
+
     def reconstruct(self, images_folder):
-        self._load_images(images_folder, self.CV_MATCHER)
+        self._load_images(images_folder, self.is_cv)
         for i in range(len(self.images)-1):
             # Detect fratures on two consecutive pictures and match them
             kp1, des1, kp2, des2 = self._get_features(self.images[i], self.images[i+1])
-            pts1, pts2 = self._get_matched_points(kp1, kp2, des1, des2, self.images[i], self.images[i+1])
+            pts1, pts2 = self._get_matched_points(kp1, kp2, des1, des2)
             
             # Initial triangulation
-            E, mask = cv2.findEssentialMat(pts1, pts2, self.K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
-            if mask is not None:
-                pts1 = pts1[mask.ravel() == 1]
-                pts2 = pts2[mask.ravel() == 1]
-            _, R, t, _ = cv2.recoverPose(E, pts1, pts2, self.K)
+            E, pts1, pts2 = self._findEssantialMatrix(pts1, pts2)
+            R, t = self._recoverPose(E, pts1, pts2)
             points_3d = self._triangulate(pts1, pts2, self.camera_rotations[-1], self.camera_translations[-1], R, t)
             
             # Use 3d points to refine pose estimation
@@ -118,20 +134,12 @@ class SfM:
         return np.vstack(self.points_3d)
 
 
-def plot_3d_points(points3D):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(points3D[:, 0], points3D[:, 1], points3D[:, 2], c='r', marker='o')
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    plt.title('Triangulated 3D Points')
-    plt.show(block=True)
+if __name__ == "__main__":
+    K = np.array([[1.59877590e+03, 0, 5.07401915e+02], [0, 1.57986433e+03, 7.23899817e+02], [0, 0, 1]])
+    dist =  np.array([1.01762294e-01, -1.85222000e+00, -1.95598585e-02, -2.43105406e-03, 4.57588149e+00])
 
-K = np.array([[1.59877590e+03, 0, 5.07401915e+02], [0, 1.57986433e+03, 7.23899817e+02], [0, 0, 1]])
-dist =  np.array([1.01762294e-01, -1.85222000e+00, -1.95598585e-02, -2.43105406e-03, 4.57588149e+00])
+    sfm = SfM(SuperPointWrapper(max_keypoints=2048), cv2.BFMatcher(normType=cv2.NORM_L2), K, dist, False)
+    # sfm = SfM(cv2.SIFT_create(), cv2.BFMatcher(normType=cv2.NORM_L2), K, dist)
 
-sfm = SfM(cv2.SIFT_create(), cv2.BFMatcher(normType=cv2.NORM_L2), K, dist, False)
-
-result = sfm.reconstruct("benchy")
-plot_3d_points(result)
+    result = sfm.reconstruct("benchy")
+    plot_3d_points(result)
