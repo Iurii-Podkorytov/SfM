@@ -79,8 +79,7 @@ class SfM:
                 pts1 = pts1[mask.ravel() == 1]
                 pts2 = pts2[mask.ravel() == 1]
 
-            print(pts1.shape)
-            if pts1.shape[0] < 4: continue
+            if pts1.shape[0] < 4: continue # not enough points to estimate pose
             _, R, t, _ = cv2.recoverPose(E, pts1, pts2, self.K)
             points_3d = self._triangulate(pts1, pts2, self.camera_rotations[-1], self.camera_translations[-1], R, t)
             
@@ -105,5 +104,5 @@ dist =  np.array([1.01762294e-01, -1.85222000e+00, -1.95598585e-02, -2.43105406e
 
 sfm = SfM(SuperPointWrapper(), SuperGlueWrapper(), K, dist)
 
-result = sfm.reconstruct("benchy2")
+result = sfm.reconstruct("benchy")
 plot_3d_points(result)
