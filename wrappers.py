@@ -1,5 +1,5 @@
 from transformers import AutoImageProcessor, SuperPointForKeypointDetection
-from superglue import SuperGlue
+from SuperGlue.superglue import SuperGlue
 import torch
 import numpy as np
 

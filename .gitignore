@@ -1,6 +1,5 @@
 frames
 *.mp4
 *.npz
-superglue.py
 test.ipynb
 colmap_test.py
