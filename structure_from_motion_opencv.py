@@ -3,10 +3,9 @@ import cv2
 import numpy as np
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
-from transformers import AutoImageProcessor, SuperPointForKeypointDetection
-from superglue import SuperGlue
+
 class SfM:
-    def __init__(self, detector, matcher, K, dist, CV_MATCHER=False):
+    def __init__(self, detector, matcher, K, dist):
         self.detector = detector
         self.matcher = matcher
         self.K = K
@@ -17,7 +16,6 @@ class SfM:
         self.camera_translations = [np.zeros((3, 1))]
         self.points_3d = []
 
-        self.CV_MATCHER = CV_MATCHER
 
     def _get_features(self, im1, im2):
         kp1, des1 = self.detector.detectAndCompute(im1, None)
@@ -119,22 +117,6 @@ class SfM:
                     
         return np.vstack(self.points_3d)
 
-class SuperPoint:
-    def __init__(self):
-        self.processor = AutoImageProcessor.from_pretrained("magic-leap-community/superpoint")
-        self.model = SuperPointForKeypointDetection.from_pretrained("magic-leap-community/superpoint")
-        self.processor.do_resize = False  # Disable resizing
-    
-    def detectAndCompute(self, img, _):
-        # Process image using SuperPoint
-        inputs = self.processor(img, return_tensors="pt")
-        outputs = self.model(**inputs)
-
-        # Extract keypoints and descriptors
-        kp = outputs.keypoints[0].detach().numpy()
-        desc = outputs.descriptors[0].detach().numpy()
-        
-        return kp, desc
 
 def plot_3d_points(points3D):
     fig = plt.figure()
@@ -149,7 +131,7 @@ def plot_3d_points(points3D):
 K = np.array([[1.59877590e+03, 0, 5.07401915e+02], [0, 1.57986433e+03, 7.23899817e+02], [0, 0, 1]])
 dist =  np.array([1.01762294e-01, -1.85222000e+00, -1.95598585e-02, -2.43105406e-03, 4.57588149e+00])
 
-sfm = SfM(SuperPoint(), cv2.BFMatcher(normType=cv2.NORM_L2), K, dist, False)
+sfm = SfM(cv2.SIFT_create(), cv2.BFMatcher(normType=cv2.NORM_L2), K, dist, False)
 
 result = sfm.reconstruct("benchy")
 plot_3d_points(result)
