@@ -38,7 +38,7 @@ Below are some examples in the procces:
 
 ## 🚀 How to Use
 
-1. Shoot a video of an object or take pictures of it.
+1. Shoot a video of an object or take pictures of it. If you have video, then go to *frame_extractor.ipynb* and preprocess the frames as you wish.
 2. Follow the instructions in the *presentation.ipynb* file
 
 ## ⚙️ Libraries and Tools Used
